@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def main():
-    code = clean_code(st.text_input("digite o codigo da ação"))
+    code = clean_code(st.text_input("digite o codigo da ação",placeholder='AAPL'))
     if code:
         check_code_consistency(code)
         df = get_stock_history(code)
