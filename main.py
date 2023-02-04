@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 def main():
     code = clean_code(st.text_input("digite o codigo da ação",placeholder='AAPL'))
@@ -15,11 +16,57 @@ def main():
         df.index = df.index.droplevel()
         draw_close_price(df)
         draw_volume_graph(df)
-        draw_custom_window_moving_average(df)
+        draw_custom_window_boiler_bands(df,'adjclose')
         draw_moving_average(df)
         draw_pct_change(df,'adjclose')
         plot_distplot(df.adjclose.pct_change())
+        draw_MACD(df,'adjclose')
         #st.dataframe(df.head())
+
+def calculate_exponential_moving_average(df,span):
+    return df.ewm(span=span,adjust=False).mean()
+def calculate_MACD(df,column):
+    EMA_12 = calculate_exponential_moving_average(df[column],12)
+    EMA_26 = calculate_exponential_moving_average(df[column],26)
+    MACD = EMA_12 - EMA_26
+    signal_line = calculate_exponential_moving_average(MACD,9)
+    return EMA_12,EMA_26,MACD,signal_line
+
+def draw_MACD(df,column):
+    EMA_12,EMA_26,MACD,signal_line = calculate_MACD(df,column)
+    st.title('MACD vs Signal')
+    fig,ax = plt.subplots(nrows=2,figsize=(10,4))
+    ax[0].plot(EMA_12,color='blue',label='Exponential Moving Average 12')
+    ax[0].plot(EMA_26,color='orange',label='Exponential Moving Average 26')
+    ax[0].legend()
+    ax[1].plot(MACD,label='MACD',color='pink')
+    ax[1].plot(signal_line,label='Signal Line',color='Purple')
+    ax[1].legend()
+    b = st.checkbox(label='show buy sell anotations?')
+    if b:
+        draw_annotators(signal_line,MACD,df,ax[1])
+    st.pyplot(fig)
+
+def draw_annotators(signal,line,df,ax):
+    aux = signal - line
+    df['temporary_a'] = np.array(aux) > 0
+    df['temporary_b'] = np.array(aux.shift(1)) < 0
+    df['cross_directions'] = 'none'
+    df.loc[~df['temporary_a'] & ~df['temporary_b'], 'cross_directions'] = 'up'
+    df.loc[df['temporary_a'] & df['temporary_b'], 'cross_directions'] = 'down'
+    for i,row in df.iterrows():
+        if row['cross_directions'] == 'up':
+            ax.annotate(
+                'BUY', 
+                xy = (i, signal[i]), xytext = (50, 50),
+                textcoords = 'offset points', ha = 'right', va = 'bottom',
+                arrowprops = dict(arrowstyle = '<-', connectionstyle = 'arc3,rad=-0.3',color='green'))
+        elif row['cross_directions'] == 'down':
+            ax.annotate(
+                "SELL", 
+                xy = (i, signal[i]), xytext = (50, -50),
+                textcoords = 'offset points', ha = 'right', va = 'bottom',
+                arrowprops = dict(arrowstyle = '<-', connectionstyle = 'arc3,rad=-0.3',color='indianred'))
 
 def draw_pct_change(df,column):
     st.title("percentage change")
@@ -36,15 +83,24 @@ def plot_distplot(value):
 def calculate_moving_average(length,values_list):
     return values_list.rolling(window=length).mean()
 
-def draw_custom_window_moving_average(df):
-    st.title("custom window moving average")
-    length = st.slider('window size',min_value=5,max_value=100,value=10,step=1)
-    mv = calculate_moving_average(length,df['volume'])
-    draw_simple_graph(mv)
+def draw_custom_window_boiler_bands(df,column):
+    
+    st.title("custom window moving average with Bollinger Bands")
+    length = st.slider('window size',min_value=3,max_value=100,value=20,step=1)
+    mv = calculate_moving_average(length,df[column])
+    upper = mv+2*mv.std()
+    lower = mv-2*mv.std()
+    fig,ax = plt.subplots(figsize=(10,4))
+    #mv.plot(legend=True,ax=ax,label="mv")
+    upper.plot(legend=True,ax=ax,label="upper")
+    lower.plot(legend=True,ax=ax,label="lower")
+    df[column].plot(legend=True,ax=ax,label=column)
+    df[column].plot(figsize=(10,5),title=f'{length} Day Rolling Bollinger Bands').fill_between(df.index,lower,upper,alpha=0.1)
+    st.pyplot(fig)
+    
 
 def draw_moving_average(df):
     st.title("moving average")
-    
     mv_10 = calculate_moving_average(10,df['volume'])
     mv_20 = calculate_moving_average(20,df['volume'])
     mv_50 = calculate_moving_average(50,df['volume'])
