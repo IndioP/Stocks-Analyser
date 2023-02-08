@@ -8,23 +8,67 @@ import seaborn as sns
 import numpy as np
 
 def main():
-    code = clean_code(st.text_input("digite o codigo da ação",placeholder='AAPL'))
-    if code:
-        check_code_consistency(code)
-        df = get_stock_history(code)
-        draw_simple_statistics(df)
-        df.index = df.index.droplevel()
-        draw_close_price(df)
-        draw_volume_graph(df)
-        draw_custom_window_boiler_bands(df,'adjclose')
-        draw_moving_average(df)
-        draw_pct_change(df,'adjclose')
-        plot_distplot(df.adjclose.pct_change())
-        draw_MACD(df,'adjclose')
-        #st.dataframe(df.head())
+    prompt = clean_code(st.text_input("Type the stock code, if you want to make correlation analysis you can place two codes separated by a single whitespace",placeholder='AAPL'))
+    if prompt:
+        #check_code_consistency(prompt)
+        prompt = clean_code(prompt)
+        codes = prompt.split()
+        if len(codes) > 1:
+            dual_stock_analysis(codes)
+        else:
+            single_stock_analysis(codes[0])
+        
+        
+        
+def dual_stock_analysis(codes):
+    dfs = {}
+    for code in codes:
+        dfs[code] = get_stock_history(code,'240d','1d')
+        st.title(code)
+        draw_simple_statistics(dfs[code])
+    
+    df = pd.DataFrame()
+    for key in dfs:
+        dfs[key].index = dfs[key].index.droplevel()
+        df[key] = dfs[key]['adjclose']
+    
+    plot_pair_grid(df)
+    plot_correlation_matrix(df)
+
+def plot_correlation_matrix(df):
+    st.title("Correlation Matrix")
+    fig,ax = plt.subplots(figsize=(10,4))
+    sns.heatmap(df.dropna().corr(),annot=True,ax=ax)
+    st.pyplot(fig)
+    
+
+def plot_pair_grid(df):
+    st.title("PairGrid")
+    draw_pairgrid(df)
+
+def draw_pairgrid(df):
+    fig = sns.PairGrid(df.dropna())
+    fig.map_upper(plt.scatter,color='purple')
+    fig.map_lower(sns.kdeplot,cmap='cool_d')
+    fig.map_diag(plt.hist,bins=40)
+    st.pyplot(fig)
+
+def single_stock_analysis(code):
+    df = get_stock_history(code,'240d','1d')
+    draw_simple_statistics(df)
+    df.index = df.index.droplevel()
+    draw_close_price(df)
+    draw_volume_graph(df)
+    draw_custom_window_boiler_bands(df,'adjclose')
+    draw_moving_average(df)
+    draw_pct_change(df,'adjclose')
+    plot_distplot(df.adjclose.pct_change())
+    draw_MACD(df,'adjclose')
+    
 
 def calculate_exponential_moving_average(df,span):
     return df.ewm(span=span,adjust=False).mean()
+
 def calculate_MACD(df,column):
     EMA_12 = calculate_exponential_moving_average(df[column],12)
     EMA_26 = calculate_exponential_moving_average(df[column],26)
@@ -127,9 +171,12 @@ def draw_simple_graph(df):
 def clean_code(code):
     code = code.strip()
     code = code.upper()
+    code = re.sub(' +', ' ', code)
     return code
 
 #The US and European stock exchanges normally use stock codes of 3-4 letters that often closely represent the company name, like EZJ for Easyjet.
+#Brazilian stock codes look like this: IRBR3.SA
+#so the code bellow isn't right
 def check_code_consistency(code):
     check_code_len(code)
     isAlpha(code)
