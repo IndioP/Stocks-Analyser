@@ -36,7 +36,22 @@ def dual_stock_analysis(codes):
     plot_correlation_matrix(tech_rets)
     plot_risk_vs_expected_return(tech_rets)
 
+def monte_carlo(start_price,mu,sigma,days):
+    dt = 1/days
+    price = np.zeros(days)
+    price[0] = start_price
+    shock = np.zeros(days)
+    drift = np.zeros(days)
+
+    for x in range(1,days):
+        shock[x] = np.random.normal(loc=mu*dt,scale=sigma*np.sqrt(dt))
+        drift[x] = mu*dt
+        price[x] = price[x-1]+(price[x-1]*(drift[x]+shock[x]))
+    return price
+
+
 def plot_risk_vs_expected_return(rets):
+    st.title("risk vs expected return graph")
     means = rets.mean()
     stds = rets.std()
 
@@ -83,7 +98,32 @@ def single_stock_analysis(code):
     draw_pct_change(df,'adjclose')
     plot_distplot(df.adjclose.pct_change())
     draw_MACD(df,'adjclose')
-    
+    plot_monte_carlo(df)
+
+def plot_monte_carlo(df,runs=500):
+    st.title("monte carlo analysis")
+    aux = df['adjclose'].pct_change()
+    mean = aux.mean()
+    sigma = aux.std()
+    start_price = df['open'][-1]
+    fig,(ax,ax2) = plt.subplots(2,1,figsize=(10,4))
+    simulations = np.zeros(runs)
+    for run in range(runs):
+        price = monte_carlo(start_price,mean,sigma,365)
+        simulations[run] = price[-1]
+        ax.plot(range(1,366),price)
+    ax.set_xlabel("Days")
+    ax.set_ylabel("Price")
+    sns.histplot(simulations,ax=ax2)
+    #ax2.hist(simulations)
+    q = np.percentile(simulations, 1)
+    ax2.axvline(x=q, linewidth=4, color='r')
+    st.pyplot(fig)
+    st.text(f"start price = {start_price}")
+    st.text(f"VaR(0.99): {start_price - q}")
+    st.text(f"q(0.99): {q}")
+    st.text(f"Mean final price:{np.mean(simulations)}")
+
 
 def calculate_exponential_moving_average(df,span):
     return df.ewm(span=span,adjust=False).mean()
