@@ -31,9 +31,28 @@ def dual_stock_analysis(codes):
     for key in dfs:
         dfs[key].index = dfs[key].index.droplevel()
         df[key] = dfs[key]['adjclose']
+    tech_rets = df.pct_change()
+    plot_pair_grid(tech_rets)
+    plot_correlation_matrix(tech_rets)
+    plot_risk_vs_expected_return(tech_rets)
+
+def plot_risk_vs_expected_return(rets):
+    means = rets.mean()
+    stds = rets.std()
+
+    fig,ax = plt.subplots(figsize=(10,4))
+    ax.scatter(means, stds,alpha = 0.5)
+    ax.set_xlabel('Expected returns')
+    ax.set_ylabel('Risk')
     
-    plot_pair_grid(df)
-    plot_correlation_matrix(df)
+    for label, x, y in zip(rets.columns, means, stds):
+        ax.annotate(
+            label, xy = (x, y), xytext = (30, 30),
+            textcoords = 'offset points', ha = 'right', va = 'bottom',
+            arrowprops = dict(arrowstyle = '-', connectionstyle = 'arc3,rad=-0.3',color='indianred'))
+    st.pyplot(fig)
+    
+
 
 def plot_correlation_matrix(df):
     st.title("Correlation Matrix")
